@@ -45,6 +45,8 @@ public class Player : MonoBehaviour
     private float rollDuration = 0.5f;
 	[SerializeField]
 	private bool useGravityOnRoll = false;
+    [SerializeField]
+    private bool useGravityOnJump = false;
 
     [SerializeField]
     private int maxHealth = 9;
@@ -103,8 +105,11 @@ public class Player : MonoBehaviour
     {
 		IDLE,
 		WALKING,
+        RUNNING,
         FALLING,
         ROLLING,
+        JUMPING,
+        DAMAGED,
 		DEAD,
     }
     private State state = State.FALLING;
@@ -143,7 +148,12 @@ public class Player : MonoBehaviour
                 Walk();
                 if(Animator)
 				    Animator.SetBool("IsMoving", true);
-				break;
+                break;
+            case State.RUNNING:
+                Run();
+                if (Animator)
+                    Animator.SetBool("IsRunning", true);
+                break;            
             case State.FALLING:
                 Fall();
                 break;
@@ -151,10 +161,12 @@ public class Player : MonoBehaviour
 				if (Animator)
 					Animator.SetBool("IsJumping", true);
 				Roll();
-				
-
-
-				break;
+                break;
+            case State.JUMPING:
+                Run();
+                if (Animator)
+                    Animator.SetBool("IsJumping", true);
+                break;
 			case State.DEAD:
 				if (Animator)
 					Animator.SetBool("IsDead", true);
@@ -295,6 +307,37 @@ public class Player : MonoBehaviour
 		}
     }
 
+    private void Run()
+    {
+        velocity = moveVelocity * Speed * 2;
+        velocity.y = gravity;
+
+        Vector3 movement = velocity * Time.deltaTime;
+
+        //ignore Gravity for minMoveDistance check
+        Vector3 movementXZ = movement;
+        movementXZ.y = 0;
+
+        if (model != null)
+        {
+            Quaternion lookAt = Quaternion.LookRotation(movementXZ);
+            model.transform.rotation = Quaternion.Lerp(model.transform.rotation, lookAt, smoothRotation);
+        }
+
+        if (movementXZ.magnitude >= controller.minMoveDistance)
+        {
+            controller.Move(movement);
+            if (!controller.isGrounded)
+            {
+                StartFall();
+            }
+        }
+        else
+        {
+            StartIdle();
+        }
+    }
+
     private void StartFall()
     {
         state = State.FALLING;
@@ -360,6 +403,28 @@ public class Player : MonoBehaviour
 			
 		}
 		
+    }
+
+    private void Jump()
+    {
+        if (Time.time < rollEnd)
+        {
+            velocity = rollVelocity;
+            Vector3 movement = velocity * Time.deltaTime;
+            controller.Move(movement);
+        }
+        else
+        {
+            velocity = Vector3.zero;
+        }
+
+        if (Time.time >= rollEnd || (useGravityOnJump && !controller.isGrounded))
+        {
+
+            StartFall();
+
+        }
+        Animator.SetBool("IsJumping", false);
     }
 
     bool IsInvincible()
